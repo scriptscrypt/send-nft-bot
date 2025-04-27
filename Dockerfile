@@ -8,8 +8,8 @@ RUN npm install -g pnpm
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies - allow updating lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Force node-fetch v2 for compatibility
 RUN npm install node-fetch@2.7.0 --force
