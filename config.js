@@ -11,8 +11,21 @@ const __dirname = path.dirname(__filename);
 
 // Configuration object
 const config = {
+  // Telegram
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  
+  // OpenAI
   openaiApiKey: process.env.OPENAI_API_KEY || '',
+  
+  // Supabase
+  supabaseUrl: process.env.SUPABASE_URL || '',
+  supabaseKey: process.env.SUPABASE_SERVICE_KEY || '',
+  
+  // Solana
+  solanaPrivateKey: process.env.SOLANA_PRIVATE_KEY || '',
+  rpcUrl: process.env.RPC_URL || 'https://api.mainnet-beta.solana.com',
+  
+  // Directories
   outputDir: path.join(__dirname, 'generated_images'),
 };
 
@@ -24,6 +37,11 @@ if (!config.telegramToken) {
 
 if (!config.openaiApiKey) {
   console.error('Error: OPENAI_API_KEY is required. Please set it in the .env file.');
+  process.exit(1);
+}
+
+if (!config.supabaseUrl || !config.supabaseKey) {
+  console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_KEY are required. Please set them in the .env file.');
   process.exit(1);
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "send-nft-bot",
   "version": "1.0.0",
-  "description": "Telegram bot for generating images with OpenAI GPT-image-1",
+  "description": "Telegram bot for generating images with OpenAI GPT-image-1 and Solana integration",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -13,13 +13,27 @@
     "telegram",
     "bot",
     "openai",
-    "image-generation"
+    "image-generation",
+    "solana",
+    "blockchain",
+    "nft"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@langchain/core": "^0.3.26",
+    "@langchain/langgraph": "^0.2.36",
+    "@langchain/openai": "^0.3.16",
+    "@supabase/supabase-js": "^2.39.6",
     "dotenv": "^16.3.1",
     "openai": "^4.20.0",
+    "solana-agent-kit": "^1.4.5",
     "telegraf": "^4.15.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }
