@@ -11,6 +11,9 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Force node-fetch v2 for compatibility
+RUN npm install node-fetch@2.7.0 --force
+
 # Copy the rest of the application
 COPY . .
 
@@ -24,5 +27,5 @@ ENV PORT=3000
 # Expose the port
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "index.js"] 
+# Start the application with ESM compatibility
+CMD ["node", "--experimental-json-modules", "index.js"] 

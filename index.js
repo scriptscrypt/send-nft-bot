@@ -1,3 +1,6 @@
+// Import ESM compatibility fix first
+import './fix-esm.js';
+
 import { Telegraf, Markup } from 'telegraf';
 import OpenAI from 'openai';
 import fs from 'fs';
