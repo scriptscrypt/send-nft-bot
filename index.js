@@ -2,9 +2,26 @@ import { Telegraf, Markup } from 'telegraf';
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 import config from './config.js';
 import supabase, { storeImage, getUserImages } from './utils/supabase.js';
 import { processSolanaMessage } from './utils/solana-agent.js';
+
+// Create a simple HTTP server for healthchecks
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  if (req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Telegram Bot is running!');
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not found');
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`HTTP server listening on port ${PORT} for healthchecks`);
+});
 
 // Create output directory if it doesn't exist
 if (!fs.existsSync(config.outputDir)) {
