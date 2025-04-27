@@ -56,7 +56,7 @@ node --no-warnings index.js
 
 # Docker
 docker build -t send-nft-bot .
-docker run -p 3001:3001 --env-file .env send-nft-bot
+docker run -p 3000:3000 --env-file .env send-nft-bot
 ```
 
 ## Troubleshooting

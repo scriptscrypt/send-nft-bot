@@ -12,7 +12,7 @@ const supabase = createClient(config.supabaseUrl, config.supabaseKey);
  * @param {string} prompt - The prompt used to generate the image
  * @returns {Promise<Object>} The stored image data
  */
-export async function storeImage(imageBuffer, filename, userId, prompt) {
+async function storeImage(imageBuffer, filename, userId, prompt) {
   try {
     // 1. Upload the image to Supabase Storage
     const { data: storageData, error: storageError } = await supabase
@@ -69,7 +69,7 @@ export async function storeImage(imageBuffer, filename, userId, prompt) {
  * @param {string} userId - The user ID
  * @returns {Promise<Array>} The user's images
  */
-export async function getUserImages(userId) {
+async function getUserImages(userId) {
   const { data, error } = await supabase
     .from('images')
     .select('*')
@@ -90,7 +90,7 @@ export async function getUserImages(userId) {
  * @param {Object} walletData - Wallet data to store
  * @returns {Promise<Object>} The stored wallet data
  */
-export async function storeUserWallet(userId, walletData) {
+async function storeUserWallet(userId, walletData) {
   try {
     // Check if user already exists
     const { data: existingUser } = await supabase
@@ -142,7 +142,7 @@ export async function storeUserWallet(userId, walletData) {
  * @param {string} userId - Telegram user ID
  * @returns {Promise<Object|null>} User wallet data or null if not found
  */
-export async function getUserWallet(userId) {
+async function getUserWallet(userId) {
   try {
     const { data, error } = await supabase
       .from('users')
@@ -171,7 +171,7 @@ export async function getUserWallet(userId) {
  * @param {boolean} isDelegated - Whether the wallet is delegated
  * @returns {Promise<Object>} Updated user data
  */
-export async function updateWalletDelegation(userId, isDelegated) {
+async function updateWalletDelegation(userId, isDelegated) {
   try {
     const { data, error } = await supabase
       .from('users')
@@ -191,8 +191,11 @@ export async function updateWalletDelegation(userId, isDelegated) {
   }
 }
 
-export default {
-  ...supabase,
+// Export the supabase client as default
+export default supabase;
+
+// Export all utility functions as named exports
+export {
   storeImage,
   getUserImages,
   storeUserWallet,

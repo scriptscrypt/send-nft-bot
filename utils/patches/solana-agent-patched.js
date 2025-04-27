@@ -1,18 +1,20 @@
-/**
- * DEPRECATED: Please use the patched version at utils/patches/solana-agent-patched.js instead
- * 
- * This file is kept for reference but has issues with JSON imports in Node.js v23+
- * and OpenAI API tool formatting.
- */
-
-import { SolanaAgentKit } from "solana-agent-kit";
-import { createVercelAITools } from "solana-agent-kit";
+import { SolanaAgentKit, createVercelAITools } from "solana-agent-kit";
 import { PublicKey } from "@solana/web3.js";
-import config from "../config.js";
-import { getUserWallet, privyClient } from "./privy.js";
+import config from "../../config.js";
+import { getUserWallet, privyClient } from "../privy.js";
 import pluginNFT from "@solana-agent-kit/plugin-nft";
-// import TokenPlugin from "@solana-agent-kit/plugin-token";
-// import MiscPlugin from "@solana-agent-kit/plugin-misc";
+import { getSolanaAgentConfig, getOpenZeppelinABI } from './solana-abi-loader.js';
+
+// Load TokenPlugin dynamically to avoid direct JSON imports in newer Node.js
+let TokenPlugin = null;
+try {
+  // Dynamic import with optional chaining to handle possible failure
+  TokenPlugin = (await import('@solana-agent-kit/plugin-token')).default;
+  console.log('Successfully loaded TokenPlugin');
+} catch (error) {
+  console.warn('Could not load TokenPlugin directly:', error.message);
+  console.log('Will initialize without TokenPlugin');
+}
 
 /**
  * Initialize Solana Agent for a specific user
@@ -24,8 +26,11 @@ export async function initializeAgent(userId) {
     // Get or create user's wallet using Privy
     const wallet = await getUserWallet(userId);
 
+    // Get any additional configurations needed
+    const safeConfig = getSolanaAgentConfig();
+
     // Initialize Solana Agent Kit with Privy server wallet
-    const solanaKit = new SolanaAgentKit(
+    let solanaKit = new SolanaAgentKit(
       {
         publicKey: new PublicKey(wallet.address),
         sendTransaction: async () => {
@@ -85,15 +90,17 @@ export async function initializeAgent(userId) {
         },
       },
       config.rpcUrl,
-      {}
+      safeConfig
     ).use(pluginNFT);
+    
+    // Apply TokenPlugin if it was successfully loaded
+    if (TokenPlugin) {
+      solanaKit = solanaKit.use(TokenPlugin);
+    }
     // Uncomment if needed and token limit allows
     // .use(MiscPlugin);
 
-    // Create Vercel AI tools for the Solana agent
-    const vercelAITools = createVercelAITools(solanaKit, solanaKit.actions);
-
-    return { solanaKit, vercelAITools };
+    return { solanaKit };
   } catch (error) {
     console.error("Failed to initialize Solana agent:", error);
     throw error;
@@ -106,7 +113,8 @@ export async function initializeAgent(userId) {
  * @returns {Promise<Array>} Vercel AI tools for the user
  */
 export async function getVercelAITools(userId) {
-  const { vercelAITools } = await initializeAgent(userId);
+  const { solanaKit } = await initializeAgent(userId);
+  const vercelAITools = createVercelAITools(solanaKit, solanaKit.actions);
   return vercelAITools;
 }
 
@@ -118,7 +126,7 @@ export async function getVercelAITools(userId) {
  */
 export async function processSolanaMessage(userId, message) {
   try {
-    // Initialize OpenAI from config
+    // Initialize OpenAI
     const OpenAI = (await import('openai')).default;
     const openai = new OpenAI({
       apiKey: config.openaiApiKey,
@@ -127,7 +135,7 @@ export async function processSolanaMessage(userId, message) {
     // Get Solana kit for this user
     const { solanaKit } = await initializeAgent(userId);
     
-    // Create a system prompt
+    // System prompt
     const systemPrompt = `You are a helpful assistant specializing in Solana blockchain.
 You can help users with their Solana-related queries and explain blockchain concepts.
 Provide accurate and clear information about Solana's features, tokens, NFTs, and wallets.
@@ -136,9 +144,14 @@ If there is a server error, inform the user to try again later.
 If asked to do something you cannot do with your current tools, explain your limitations politely.
 Be concise and helpful with your responses.`;
 
-    // Extract available actions from solanaKit
-    const availableActions = Object.entries(solanaKit.actions).map(([name, action]) => {
-      // Get function details from the action
+    // Create messages array
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: message }
+    ];
+
+    // Prepare tools in the correct format for OpenAI
+    const formattedTools = Object.entries(solanaKit.actions || {}).map(([name, action]) => {
       return {
         type: "function",
         function: {
@@ -149,59 +162,71 @@ Be concise and helpful with your responses.`;
       };
     });
 
-    // Call OpenAI with properly formatted tools
-    const completion = await openai.chat.completions.create({
+    // Use OpenAI with properly formatted tools
+    const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message }
-      ],
-      tools: availableActions,
+      messages: messages,
+      tools: formattedTools,
       tool_choice: "auto",
       temperature: 0.7,
     });
 
-    // Process tool calls if needed
-    let responseContent = completion.choices[0].message.content || "";
-    const toolCalls = completion.choices[0].message.tool_calls;
+    // Get initial response
+    let responseContent = response.choices[0].message.content || "";
+    const toolCalls = response.choices[0].message.tool_calls || [];
     
-    if (toolCalls && toolCalls.length > 0) {
-      // Handle tool calls sequentially
+    // If there are tool calls, process them
+    if (toolCalls.length > 0) {
+      // Create a new messages array including the assistant's response with tool calls
+      const updatedMessages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: responseContent || null,
+          tool_calls: toolCalls
+        }
+      ];
+      
+      // Process each tool call
       for (const toolCall of toolCalls) {
         try {
-          const actionName = toolCall.function.name;
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments || "{}");
           
-          // Check if the action exists in solanaKit
-          if (!solanaKit.actions[actionName]) {
-            responseContent += `\n\nUnable to find tool: ${actionName}`;
-            continue;
+          // Execute the action using the SolanaAgentKit
+          let toolResult;
+          if (solanaKit.actions && typeof solanaKit.actions[functionName] === 'function') {
+            toolResult = await solanaKit.actions[functionName](functionArgs);
+          } else {
+            toolResult = { error: `Function ${functionName} not available` };
           }
           
-          // Parse arguments
-          const args = JSON.parse(toolCall.function.arguments);
-          
-          // Execute the action from solanaKit
-          const result = await solanaKit.actions[actionName](args);
-          
-          // Create a new completion with the tool results
-          const followUpCompletion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: message },
-              { role: "assistant", content: responseContent, tool_calls: toolCalls },
-              { role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) }
-            ],
-            temperature: 0.7,
+          // Add the tool result to messages
+          updatedMessages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(toolResult)
           });
-          
-          // Update response content
-          responseContent = followUpCompletion.choices[0].message.content || "I processed your request, but couldn't generate a response.";
         } catch (error) {
           console.error(`Error executing tool ${toolCall.function.name}:`, error);
-          responseContent += `\n\nError executing ${toolCall.function.name}: ${error.message}`;
+          // Add error result to messages
+          updatedMessages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ error: error.message })
+          });
         }
       }
+      
+      // Get the final response with tool results
+      const finalResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: updatedMessages,
+        temperature: 0.7,
+      });
+      
+      // Update response
+      responseContent = finalResponse.choices[0].message.content || "I processed your request, but couldn't generate a response.";
     }
 
     return responseContent;

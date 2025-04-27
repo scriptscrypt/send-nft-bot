@@ -19,11 +19,11 @@ RUN mkdir -p generated_images
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=3005
 # Note: Other environment variables (PRIVY_APP_ID, PRIVY_APP_SECRET, etc.) should be set at runtime
 
 # Expose the port
-EXPOSE 3001
+EXPOSE 3005
 
 # Start the application with ESM and JSON module compatibility
 CMD ["node", "--experimental-json-modules", "--no-warnings", "index.js"] 

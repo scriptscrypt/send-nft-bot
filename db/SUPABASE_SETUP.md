@@ -1,3 +1,12 @@
+# DEPRECATED: This file has been moved to db/SUPABASE_SETUP.md
+
+This documentation has been relocated to the db folder along with the SQL setup files.
+Please refer to the updated version at `db/SUPABASE_SETUP.md`.
+
+All database-related files are now centralized in the db directory for better organization.
+
+---
+
 # Supabase Setup Guide
 
 This document describes how to set up the Supabase database for the Telegram bot.
