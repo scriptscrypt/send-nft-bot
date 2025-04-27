@@ -11,9 +11,6 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies - allow updating lockfile
 RUN pnpm install --no-frozen-lockfile
 
-# Force node-fetch v2 for compatibility
-RUN npm install node-fetch@2.7.0 --force
-
 # Copy the rest of the application
 COPY . .
 
