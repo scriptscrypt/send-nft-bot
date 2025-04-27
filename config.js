@@ -25,6 +25,10 @@ const config = {
   solanaPrivateKey: process.env.SOLANA_PRIVATE_KEY || '',
   rpcUrl: process.env.RPC_URL || 'https://api.mainnet-beta.solana.com',
   
+  // Privy
+  privyAppId: process.env.PRIVY_APP_ID || '',
+  privyAppSecret: process.env.PRIVY_APP_SECRET || '',
+  
   // Directories
   outputDir: path.join(__dirname, 'generated_images'),
 };
@@ -43,6 +47,10 @@ if (!config.openaiApiKey) {
 if (!config.supabaseUrl || !config.supabaseKey) {
   console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_KEY are required. Please set them in the .env file.');
   process.exit(1);
+}
+
+if (!config.privyAppId || !config.privyAppSecret) {
+  console.warn('Warning: PRIVY_APP_ID and PRIVY_APP_SECRET are not set. Privy wallet functionality will not work.');
 }
 
 export default config; 

@@ -84,4 +84,118 @@ export async function getUserImages(userId) {
   return data;
 }
 
-export default supabase; 
+/**
+ * Stores user wallet information in the database
+ * @param {string} userId - Telegram user ID
+ * @param {Object} walletData - Wallet data to store
+ * @returns {Promise<Object>} The stored wallet data
+ */
+export async function storeUserWallet(userId, walletData) {
+  try {
+    // Check if user already exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('telegram_id', userId)
+      .single();
+    
+    if (existingUser) {
+      // Update existing user
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          wallet_address: walletData.address,
+          wallet_id: walletData.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('telegram_id', userId)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      return data;
+    } else {
+      // Create new user
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          telegram_id: userId,
+          wallet_address: walletData.address,
+          wallet_id: walletData.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      return data;
+    }
+  } catch (error) {
+    console.error('Error storing user wallet:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gets a user's wallet information from the database
+ * @param {string} userId - Telegram user ID
+ * @returns {Promise<Object|null>} User wallet data or null if not found
+ */
+export async function getUserWallet(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('telegram_id', userId)
+      .single();
+      
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - user not found
+        return null;
+      }
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error getting user wallet:', error);
+    throw error;
+  }
+}
+
+/**
+ * Updates user wallet delegation status
+ * @param {string} userId - Telegram user ID
+ * @param {boolean} isDelegated - Whether the wallet is delegated
+ * @returns {Promise<Object>} Updated user data
+ */
+export async function updateWalletDelegation(userId, isDelegated) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        is_wallet_delegated: isDelegated,
+        updated_at: new Date().toISOString()
+      })
+      .eq('telegram_id', userId)
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating wallet delegation:', error);
+    throw error;
+  }
+}
+
+export default {
+  ...supabase,
+  storeImage,
+  getUserImages,
+  storeUserWallet,
+  getUserWallet,
+  updateWalletDelegation
+}; 

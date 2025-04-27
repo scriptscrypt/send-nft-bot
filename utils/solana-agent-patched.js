@@ -1,13 +1,31 @@
-import { SolanaAgentKit, createLangchainTools } from "solana-agent-kit";
-import { ChatOpenAI } from "@langchain/openai";
-import { MemorySaver } from "@langchain/langgraph";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { HumanMessage } from "@langchain/core/messages";
-import { PublicKey } from "@solana/web3.js";
-import config from "../config.js";
-import { getUserWallet, privyClient } from "./privy.js";
-import pluginNFT from "@solana-agent-kit/plugin-nft";
-import pluginToken from "@solana-agent-kit/plugin-token";
+import { SolanaAgentKit, createLangchainTools as createSolanaTools } from 'solana-agent-kit';
+import { ChatOpenAI } from '@langchain/openai';
+import { MemorySaver } from '@langchain/langgraph';
+import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { HumanMessage } from '@langchain/core/messages';
+import { PublicKey } from '@solana/web3.js';
+import config from '../config.js';
+import { getUserWallet, privyClient } from './privy.js';
+import { getSolanaAgentConfig } from './solana-abi-loader.js';
+
+// Dynamic import for TokenPlugin to avoid direct JSON imports
+let TokenPlugin;
+
+// Safe import of plugins
+async function importPlugins() {
+  try {
+    const tokenModule = await import('@solana-agent-kit/plugin-token');
+    TokenPlugin = tokenModule.default;
+    console.log('Successfully imported TokenPlugin');
+  } catch (error) {
+    console.error('Error importing TokenPlugin:', error);
+    // Create a fallback plugin if import fails
+    TokenPlugin = () => ({
+      name: 'token-plugin-fallback',
+      functions: [],
+    });
+  }
+}
 
 /**
  * Initialize Solana Agent for a specific user
@@ -16,16 +34,22 @@ import pluginToken from "@solana-agent-kit/plugin-token";
  */
 export async function initializeAgent(userId) {
   try {
+    // Ensure plugins are imported
+    await importPlugins();
+    
     // Initialize ChatGPT model
     const llm = new ChatOpenAI({
-      modelName: "gpt-4o-mini",
+      modelName: 'gpt-4o-mini',
       temperature: 0.7,
       openAIApiKey: config.openaiApiKey,
     });
 
     // Get or create user's wallet using Privy
     const wallet = await getUserWallet(userId);
-
+    
+    // Get any additional configurations needed to avoid JSON import issues
+    const safeConfig = getSolanaAgentConfig();
+    
     // Initialize Solana Agent Kit with Privy server wallet
     const solanaKit = new SolanaAgentKit(
       {
@@ -45,13 +69,12 @@ export async function initializeAgent(userId) {
         signAllTransactions: async (txs) => {
           const signedTxs = await Promise.all(
             txs.map(async (tx) => {
-              const { signedTransaction } =
-                await privyClient.walletApi.solana.signTransaction({
-                  address: wallet.address,
-                  walletId: wallet.id,
-                  chainType: "solana",
-                  transaction: tx,
-                });
+              const { signedTransaction } = await privyClient.walletApi.solana.signTransaction({
+                address: wallet.address,
+                walletId: wallet.id,
+                chainType: "solana",
+                transaction: tx,
+              });
 
               return {
                 ...tx,
@@ -63,44 +86,45 @@ export async function initializeAgent(userId) {
           return signedTxs;
         },
         signTransaction: async (tx) => {
-          const { signedTransaction } =
-            await privyClient.walletApi.solana.signTransaction({
-              address: wallet.address,
-              walletId: wallet.id,
-              chainType: "solana",
-              transaction: tx,
-            });
+          const { signedTransaction } = await privyClient.walletApi.solana.signTransaction({
+            address: wallet.address,
+            walletId: wallet.id, 
+            chainType: "solana",
+            transaction: tx,
+          });
 
           return signedTransaction;
         },
         signAndSendTransaction: async (tx) => {
-          const { hash } =
-            await privyClient.walletApi.solana.signAndSendTransaction({
-              address: wallet.address,
-              caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", // Mainnet Solana
-              chainType: "solana",
-              walletId: wallet.id,
-              transaction: tx,
-            });
+          const { hash } = await privyClient.walletApi.solana.signAndSendTransaction({
+            address: wallet.address,
+            caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", // Mainnet Solana
+            chainType: "solana",
+            walletId: wallet.id,
+            transaction: tx,
+          });
 
           return { signature: hash };
         },
       },
       config.rpcUrl,
-      {}
-    )
-      .use(pluginNFT())
-      .use(pluginToken());
+      safeConfig
+    );
+
+    // Apply plugins safely
+    if (TokenPlugin) {
+      solanaKit.use(TokenPlugin);
+    }
 
     // Create Solana tools
-    const tools = createLangchainTools(solanaKit);
-
+    const tools = createSolanaTools(solanaKit);
+    
     // Set up memory for the agent
     const memory = new MemorySaver();
-
+    
     // Configure the agent with the user's thread ID
     const agentConfig = { configurable: { thread_id: userId } };
-
+    
     // Create the agent
     const agent = createReactAgent({
       llm,
@@ -119,7 +143,7 @@ export async function initializeAgent(userId) {
 
     return { agent, config: agentConfig };
   } catch (error) {
-    console.error("Failed to initialize Solana agent:", error);
+    console.error('Failed to initialize Solana agent:', error);
     throw error;
   }
 }
@@ -134,39 +158,42 @@ export async function processSolanaMessage(userId, message) {
   try {
     // Initialize the agent for this user
     const { agent, config } = await initializeAgent(userId);
-
+    
     // Stream the agent's response
     const stream = await agent.stream(
       { messages: [new HumanMessage(message)] },
-      config
+      config,
     );
-
+    
     // Set a timeout to prevent hanging
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout")), 30010)
+      setTimeout(() => reject(new Error('Timeout')), 30010),
     );
-
+    
     // Collect all response chunks
-    let fullResponse = "";
-
+    let fullResponse = '';
+    
     try {
       // Race the stream against the timeout
-      for await (const chunk of await Promise.race([stream, timeoutPromise])) {
-        if ("agent" in chunk && chunk.agent.messages[0]?.content) {
+      for await (const chunk of await Promise.race([
+        stream,
+        timeoutPromise,
+      ])) {
+        if ('agent' in chunk && chunk.agent.messages[0]?.content) {
           const content = String(chunk.agent.messages[0].content);
           fullResponse += content;
         }
       }
-
+      
       return fullResponse.trim();
     } catch (error) {
-      if (error.message === "Timeout") {
+      if (error.message === 'Timeout') {
         return "I'm sorry, the operation took too long and timed out. Please try again.";
       }
       throw error;
     }
   } catch (error) {
-    console.error("Error processing Solana message:", error);
+    console.error('Error processing Solana message:', error);
     return "I'm sorry, an error occurred while processing your request.";
   }
 }
@@ -174,4 +201,4 @@ export async function processSolanaMessage(userId, message) {
 export default {
   initializeAgent,
   processSolanaMessage,
-};
+}; 

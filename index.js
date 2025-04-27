@@ -8,10 +8,18 @@ import path from 'path';
 import http from 'http';
 import config from './config.js';
 import supabase, { storeImage, getUserImages } from './utils/supabase.js';
-import { processSolanaMessage } from './utils/solana-agent.js';
+import { processSolanaMessage } from './utils/solana-agent-patched.js';
+import { 
+  createUserWallet, 
+  getUserWallet, 
+  exportWallet, 
+  isWalletDelegated, 
+  delegateWallet,
+  revokeWallet 
+} from './utils/privy.js';
 
 // Create a simple HTTP server for healthchecks
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const server = http.createServer((req, res) => {
   if (req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -51,6 +59,7 @@ bot.start((ctx) => {
     { command: '/generate', description: 'Generate an image from a prompt' },
     { command: '/transparent', description: 'Generate an image with transparent background' },
     { command: '/myimages', description: 'View your generated images' },
+    { command: '/wallet', description: 'Manage your Solana wallet' },
     { command: '/help', description: 'Show available commands' },
   ];
   
@@ -62,6 +71,7 @@ bot.start((ctx) => {
     '/generate [prompt] - Generate an image\n' +
     '/transparent [prompt] - Generate an image with transparent background\n' +
     '/myimages - View your stored images\n' +
+    '/wallet - Manage your Solana wallet\n' +
     '/help - See all commands\n\n' +
     'For Solana help, just ask me anything about Solana!');
 });
@@ -73,6 +83,7 @@ Available commands:
 /generate [prompt] - Generate an image from your prompt
 /transparent [prompt] - Generate an image with transparent background
 /myimages - Show your previously generated images
+/wallet - Manage your Solana wallet
 Example: /generate A cat sitting on a beach at sunset
 
 You can also ask me about Solana blockchain or NFTs!
@@ -221,6 +232,31 @@ bot.command('myimages', async (ctx) => {
   } catch (error) {
     console.error('Error fetching images:', error);
     ctx.reply('Sorry, there was an error fetching your images. Please try again later.');
+  }
+});
+
+// Wallet management command
+bot.command('wallet', async (ctx) => {
+  try {
+    const userId = ctx.from.id.toString();
+    
+    // Check if user has a delegated wallet (for server sessions)
+    const hasDelegatedWallet = await isWalletDelegated(userId);
+    
+    // Create buttons for wallet actions
+    const walletButtons = Markup.inlineKeyboard([
+      [Markup.button.callback('Create Wallet', 'wallet:create')],
+      [Markup.button.callback('View Address', 'wallet:view')],
+      [Markup.button.callback('Export Private Key', 'wallet:export')],
+      [hasDelegatedWallet 
+        ? Markup.button.callback('Revoke Server Session', 'wallet:revoke') 
+        : Markup.button.callback('Enable Server Session', 'wallet:delegate')]
+    ]);
+    
+    await ctx.reply('Manage your Solana wallet:', walletButtons);
+  } catch (error) {
+    console.error('Error with wallet command:', error);
+    ctx.reply('Sorry, there was an error accessing wallet functionality. Please try again later.');
   }
 });
 
@@ -478,6 +514,135 @@ bot.action(/existcol:(.+)/, async (ctx) => {
     console.error('Error preparing mint to existing collection:', error);
     const errorMessage = error.message || 'Unknown error';
     await ctx.reply(`Sorry, there was an error: ${errorMessage}\n\nPlease try again later.`);
+  }
+});
+
+// Handle wallet action callbacks
+bot.action(/wallet:(.*)/, async (ctx) => {
+  try {
+    const userId = ctx.from.id.toString();
+    const action = ctx.match[1];
+    
+    switch (action) {
+      case 'create':
+        // Create a new wallet for the user
+        await ctx.answerCbQuery('Creating your wallet...');
+        const newWallet = await createUserWallet(userId);
+        await ctx.reply(`✅ New Solana wallet created!\n\nAddress: \`${newWallet.address}\``, { parse_mode: 'Markdown' });
+        break;
+        
+      case 'view':
+        // View wallet address
+        await ctx.answerCbQuery('Fetching your wallet...');
+        const wallet = await getUserWallet(userId);
+        await ctx.reply(`Your Solana wallet address:\n\n\`${wallet.address}\``, { parse_mode: 'Markdown' });
+        break;
+        
+      case 'export':
+        // Warning before exporting private key
+        await ctx.answerCbQuery('Preparing to export...');
+        const warningMsg = await ctx.reply(
+          '⚠️ WARNING: Your private key is sensitive information!\n\n' +
+          'Never share it with anyone and store it securely.\n\n' +
+          'Do you want to continue?',
+          Markup.inlineKeyboard([
+            Markup.button.callback('Yes, export my key', 'wallet:confirm_export'),
+            Markup.button.callback('Cancel', 'wallet:cancel_export')
+          ])
+        );
+        
+        // Store message ID for later deletion
+        ctx.session.warningMessageId = warningMsg.message_id;
+        break;
+        
+      case 'confirm_export':
+        // Export the private key
+        await ctx.answerCbQuery('Exporting private key...');
+        
+        // Delete the warning message for security
+        if (ctx.session.warningMessageId) {
+          await ctx.telegram.deleteMessage(ctx.chat.id, ctx.session.warningMessageId);
+          delete ctx.session.warningMessageId;
+        }
+        
+        const exportData = await exportWallet(userId);
+        
+        // Send private key in a way that auto-deletes after viewing
+        await ctx.reply(
+          '🔑 Here is your private key:\n\n' +
+          `\`${exportData.privateKey}\`\n\n` +
+          'This message will be deleted in 60 seconds for security.',
+          { 
+            parse_mode: 'Markdown',
+          }
+        ).then(message => {
+          // Delete the message after 60 seconds
+          setTimeout(() => {
+            ctx.telegram.deleteMessage(ctx.chat.id, message.message_id)
+              .catch(e => console.error('Failed to delete key message:', e));
+          }, 60000);
+        });
+        break;
+        
+      case 'cancel_export':
+        // Cancel export operation
+        await ctx.answerCbQuery('Export cancelled');
+        
+        // Delete the warning message
+        if (ctx.session.warningMessageId) {
+          await ctx.telegram.deleteMessage(ctx.chat.id, ctx.session.warningMessageId);
+          delete ctx.session.warningMessageId;
+        }
+        
+        await ctx.reply('Private key export cancelled.');
+        break;
+        
+      case 'delegate':
+        // Enable server sessions for wallet
+        await ctx.answerCbQuery('Enabling server session...');
+        
+        try {
+          const wallet = await getUserWallet(userId);
+          const success = await delegateWallet(userId);
+          
+          if (success) {
+            await ctx.reply(
+              '🔄 Server session functionality enabled!\n\n' +
+              'Your wallet can now be used for transactions initiated by the server.'
+            );
+          } else {
+            await ctx.reply('Sorry, there was an error enabling server sessions. Please try again later.');
+          }
+        } catch (error) {
+          console.error('Error delegating wallet:', error);
+          await ctx.reply('Sorry, there was an error enabling server sessions. Please try again later.');
+        }
+        break;
+        
+      case 'revoke':
+        // Revoke server sessions for wallet
+        await ctx.answerCbQuery('Revoking server session...');
+        
+        try {
+          const success = await revokeWallet(userId);
+          
+          if (success) {
+            await ctx.reply(
+              '✅ Server session access revoked!\n\n' +
+              'The server can no longer use your wallet for transactions.'
+            );
+          } else {
+            await ctx.reply('Sorry, there was an error revoking server sessions. Please try again later.');
+          }
+        } catch (error) {
+          console.error('Error revoking wallet session:', error);
+          await ctx.reply('Sorry, there was an error revoking server sessions. Please try again later.');
+        }
+        break;
+    }
+  } catch (error) {
+    console.error('Error with wallet action:', error);
+    await ctx.reply('Sorry, there was an error processing your wallet request. Please try again later.');
   }
 });
 

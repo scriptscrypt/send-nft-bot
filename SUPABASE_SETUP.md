@@ -1,6 +1,113 @@
 # Supabase Setup Guide
 
-Follow these steps to set up your Supabase project for the Telegram Image Generation Bot:
+This document describes how to set up the Supabase database for the Telegram bot.
+
+## Database Setup
+
+The bot uses Supabase to store generated images and user wallet data. Follow these steps to set up the database:
+
+1. Create a new Supabase project at https://supabase.com
+2. Use the SQL editor to create the required tables
+3. Configure environment variables
+
+## SQL Scripts
+
+### Images Table
+
+Run the following SQL to create the images table:
+
+```sql
+-- Create images table for storing generated images
+CREATE TABLE IF NOT EXISTS public.images (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    url TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create index on user_id for faster lookups
+CREATE INDEX IF NOT EXISTS idx_images_user_id ON public.images(user_id);
+
+-- Set up Row Level Security (RLS)
+ALTER TABLE public.images ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for the service role to manage all data
+CREATE POLICY service_manage_all_images ON public.images 
+    FOR ALL 
+    TO service_role 
+    USING (true);
+
+-- Grant access to authenticated users
+GRANT ALL ON public.images TO authenticated;
+GRANT ALL ON public.images TO service_role;
+```
+
+### Users Table (Wallet Management)
+
+Run the following SQL to create the users table for wallet management:
+
+```sql
+-- Create users table for storing wallet information
+CREATE TABLE IF NOT EXISTS public.users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    telegram_id TEXT NOT NULL UNIQUE,
+    wallet_address TEXT,
+    wallet_id TEXT,
+    is_wallet_delegated BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create index on telegram_id for faster lookups
+CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON public.users(telegram_id);
+
+-- Set up Row Level Security (RLS)
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for the service role to manage all data
+CREATE POLICY service_manage_all_users ON public.users 
+    FOR ALL 
+    TO service_role 
+    USING (true);
+
+-- Grant access to authenticated users
+GRANT ALL ON public.users TO authenticated;
+GRANT ALL ON public.users TO service_role;
+
+-- Create or replace function to handle user creation/updates
+CREATE OR REPLACE FUNCTION public.handle_user_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for automatically updating updated_at
+CREATE TRIGGER users_updated_at
+  BEFORE UPDATE ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_user_update();
+```
+
+## Storage Setup
+
+1. Create a new bucket called `images` in the Storage section
+2. Set the bucket to be public (for image URLs)
+3. Configure CORS if needed
+
+## Environment Variables
+
+Add the following environment variables to your bot configuration:
+
+```
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+```
+
+These values can be found in your Supabase project settings under "API".
 
 ## 1. Create a Supabase Project
 
