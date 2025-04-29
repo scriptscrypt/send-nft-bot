@@ -2,6 +2,13 @@ FROM node:18-slim
 
 WORKDIR /app
 
+# Install build essentials and python for node-gyp
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install pnpm
 RUN npm install -g pnpm
 
