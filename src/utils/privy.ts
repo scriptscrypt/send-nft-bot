@@ -1,22 +1,38 @@
-import { PrivyClient } from "@privy-io/server-auth";
+import { PrivyClient } from '@privy-io/server-auth';
 import config from '../config.js';
 import { getUserWallet as getDbUserWallet, storeUserWallet, updateWalletDelegation } from './supabase.js';
 
+// Define types
+interface Wallet {
+  id: string;
+  address: string;
+  chainType: string;
+  [key: string]: any;
+}
+
+interface WalletExport {
+  privateKey: string;
+  [key: string]: any;
+}
+
 // Initialize Privy client
-export const privyClient = new PrivyClient(
+export const privy = new PrivyClient(
   config.privyAppId,
-  config.privyAppSecret
+  config.privyAppSecret,
+  {
+    apiURL: 'https://auth.privy.io',
+  }
 );
 
 /**
  * Create a new wallet for a user with Privy
- * @param {string} userId - Telegram user ID to associate with the wallet
- * @returns {Promise<Object>} Created wallet object
+ * @param userId - Telegram user ID to associate with the wallet
+ * @returns Created wallet object
  */
-export async function createUserWallet(userId) {
+export async function createUserWallet(userId: string): Promise<Wallet> {
   try {
     // Create a Solana wallet for the user
-    const wallet = await privyClient.walletApi.createWallet({
+    const wallet = await privy.walletApi.createWallet({
       chainType: "solana"
     });
     
@@ -32,10 +48,10 @@ export async function createUserWallet(userId) {
 
 /**
  * Get a user's wallet, or create one if it doesn't exist
- * @param {string} userId - Telegram user ID
- * @returns {Promise<Object>} The user's wallet
+ * @param userId - Telegram user ID
+ * @returns The user's wallet
  */
-export async function getUserWallet(userId) {
+export async function getUserWallet(userId: string): Promise<Wallet> {
   try {
     // Check database first
     const dbUser = await getDbUserWallet(userId);
@@ -43,7 +59,7 @@ export async function getUserWallet(userId) {
     if (dbUser && dbUser.wallet_id) {
       try {
         // Try to get the existing wallet from Privy
-        const wallet = await privyClient.walletApi.getWallet({ id: dbUser.wallet_id });
+        const wallet = await privy.walletApi.getWallet({ id: dbUser.wallet_id });
         return wallet;
       } catch (error) {
         console.log('Error retrieving wallet from Privy, creating a new one:', error);
@@ -62,10 +78,10 @@ export async function getUserWallet(userId) {
 
 /**
  * Export a user's wallet private key
- * @param {string} userId - Telegram user ID
- * @returns {Promise<Object>} Wallet export information including private key
+ * @param userId - Telegram user ID
+ * @returns Wallet export information including private key
  */
-export async function exportWallet(userId) {
+export async function exportWallet(userId: string): Promise<WalletExport> {
   try {
     // Get the user's wallet from database
     const dbUser = await getDbUserWallet(userId);
@@ -74,8 +90,8 @@ export async function exportWallet(userId) {
       throw new Error('User does not have a wallet');
     }
     
-    // Export the private key
-    const exportResult = await privyClient.walletApi.exportWallet({
+    // Export the private key with type assertion
+    const exportResult = await (privy.walletApi as any).exportWallet({
       walletId: dbUser.wallet_id,
       chainType: "solana"
     });
@@ -89,10 +105,10 @@ export async function exportWallet(userId) {
 
 /**
  * Check if a wallet is delegated for server sessions
- * @param {string} userId - Telegram user ID
- * @returns {Promise<boolean>} True if wallet is delegated
+ * @param userId - Telegram user ID
+ * @returns True if wallet is delegated
  */
-export async function isWalletDelegated(userId) {
+export async function isWalletDelegated(userId: string): Promise<boolean> {
   try {
     // Get user from database
     const dbUser = await getDbUserWallet(userId);
@@ -110,10 +126,10 @@ export async function isWalletDelegated(userId) {
 
 /**
  * Simulate wallet delegation for server sessions
- * @param {string} userId - Telegram user ID
- * @returns {Promise<boolean>} True if delegation was successful
+ * @param userId - Telegram user ID
+ * @returns True if delegation was successful
  */
-export async function delegateWallet(userId) {
+export async function delegateWallet(userId: string): Promise<boolean> {
   try {
     // In a real implementation, this would involve a frontend UI component
     // For now, we'll just update the database to mark the wallet as delegated
@@ -127,10 +143,10 @@ export async function delegateWallet(userId) {
 
 /**
  * Revoke server session for a wallet
- * @param {string} userId - Telegram user ID
- * @returns {Promise<boolean>} True if revocation was successful
+ * @param userId - Telegram user ID
+ * @returns True if revocation was successful
  */
-export async function revokeWallet(userId) {
+export async function revokeWallet(userId: string): Promise<boolean> {
   try {
     // Update database to mark wallet as not delegated
     await updateWalletDelegation(userId, false);
@@ -141,12 +157,4 @@ export async function revokeWallet(userId) {
   }
 }
 
-export default {
-  privyClient,
-  createUserWallet,
-  getUserWallet,
-  exportWallet,
-  isWalletDelegated,
-  delegateWallet,
-  revokeWallet
-}; 
+export default privy; 

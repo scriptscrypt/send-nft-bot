@@ -9,8 +9,21 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Configuration interface
+interface Config {
+  telegramToken: string;
+  openaiApiKey: string;
+  supabaseUrl: string;
+  supabaseKey: string;
+  solanaPrivateKey: string;
+  rpcUrl: string;
+  privyAppId: string;
+  privyAppSecret: string;
+  outputDir: string;
+}
+
 // Configuration object
-const config = {
+const config: Config = {
   // Telegram
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   
@@ -30,7 +43,7 @@ const config = {
   privyAppSecret: process.env.PRIVY_APP_SECRET || '',
   
   // Directories
-  outputDir: path.join(__dirname, 'generated_images'),
+  outputDir: path.join(__dirname, '..', 'generated_images'),
 };
 
 // Validate configuration

@@ -11,6 +11,7 @@ pnpm-debug.log
 
 # Generated files
 generated_images/*
+dist/*
 
 # Git files
 .git
@@ -21,4 +22,17 @@ generated_images/*
 .vscode
 *.swp
 *.swo
-.DS_Store 
+.DS_Store
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+
+# Documentation
+README.md
+LICENSE
+*.md
+
+# Logs
+logs
+*.log 

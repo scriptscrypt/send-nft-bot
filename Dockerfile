@@ -14,6 +14,9 @@ RUN pnpm install --no-frozen-lockfile
 # Copy the rest of the application
 COPY . .
 
+# Build TypeScript
+RUN pnpm run build
+
 # Create directory for generated images
 RUN mkdir -p generated_images
 
@@ -25,5 +28,5 @@ ENV PORT=3005
 # Expose the port
 EXPOSE 3005
 
-# Start the application with ESM and JSON module compatibility
-CMD ["node", "--experimental-json-modules", "--no-warnings", "index.js"] 
+# Start the application
+CMD ["node", "dist/index.js"] 

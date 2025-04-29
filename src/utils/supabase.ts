@@ -1,18 +1,42 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import config from '../config.js';
 
+// Define types
+interface ImageData {
+  user_id: string;
+  filename: string;
+  prompt: string;
+  path: string;
+  url: string;
+  created_at: string;
+}
+
+interface UserData {
+  telegram_id: string;
+  wallet_address: string;
+  wallet_id: string;
+  is_wallet_delegated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Initialize Supabase client
-const supabase = createClient(config.supabaseUrl, config.supabaseKey);
+const supabase: SupabaseClient = createClient(config.supabaseUrl, config.supabaseKey);
 
 /**
  * Store an image in Supabase storage
- * @param {Buffer} imageBuffer - The image buffer
- * @param {string} filename - The filename
- * @param {string} userId - The user ID
- * @param {string} prompt - The prompt used to generate the image
- * @returns {Promise<Object>} The stored image data
+ * @param imageBuffer - The image buffer
+ * @param filename - The filename
+ * @param userId - The user ID
+ * @param prompt - The prompt used to generate the image
+ * @returns The stored image data
  */
-async function storeImage(imageBuffer, filename, userId, prompt) {
+async function storeImage(
+  imageBuffer: Buffer,
+  filename: string,
+  userId: string,
+  prompt: string
+): Promise<ImageData> {
   try {
     // 1. Upload the image to Supabase Storage
     const { data: storageData, error: storageError } = await supabase
@@ -66,10 +90,10 @@ async function storeImage(imageBuffer, filename, userId, prompt) {
 
 /**
  * Get all images for a user
- * @param {string} userId - The user ID
- * @returns {Promise<Array>} The user's images
+ * @param userId - The user ID
+ * @returns The user's images
  */
-async function getUserImages(userId) {
+async function getUserImages(userId: string): Promise<ImageData[]> {
   const { data, error } = await supabase
     .from('images')
     .select('*')
@@ -86,11 +110,14 @@ async function getUserImages(userId) {
 
 /**
  * Stores user wallet information in the database
- * @param {string} userId - Telegram user ID
- * @param {Object} walletData - Wallet data to store
- * @returns {Promise<Object>} The stored wallet data
+ * @param userId - Telegram user ID
+ * @param walletData - Wallet data to store
+ * @returns The stored wallet data
  */
-async function storeUserWallet(userId, walletData) {
+async function storeUserWallet(
+  userId: string,
+  walletData: { address: string; id: string }
+): Promise<UserData> {
   try {
     // Check if user already exists
     const { data: existingUser } = await supabase
@@ -139,10 +166,10 @@ async function storeUserWallet(userId, walletData) {
 
 /**
  * Gets a user's wallet information from the database
- * @param {string} userId - Telegram user ID
- * @returns {Promise<Object|null>} User wallet data or null if not found
+ * @param userId - Telegram user ID
+ * @returns User wallet data or null if not found
  */
-async function getUserWallet(userId) {
+async function getUserWallet(userId: string): Promise<UserData | null> {
   try {
     const { data, error } = await supabase
       .from('users')
@@ -167,11 +194,14 @@ async function getUserWallet(userId) {
 
 /**
  * Updates user wallet delegation status
- * @param {string} userId - Telegram user ID
- * @param {boolean} isDelegated - Whether the wallet is delegated
- * @returns {Promise<Object>} Updated user data
+ * @param userId - Telegram user ID
+ * @param isDelegated - Whether the wallet is delegated
+ * @returns Updated user data
  */
-async function updateWalletDelegation(userId, isDelegated) {
+async function updateWalletDelegation(
+  userId: string,
+  isDelegated: boolean
+): Promise<UserData> {
   try {
     const { data, error } = await supabase
       .from('users')
