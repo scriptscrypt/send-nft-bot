@@ -1,50 +1,25 @@
 import { SolanaAgentKit } from "solana-agent-kit";
 import { createVercelAITools } from "solana-agent-kit";
-import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import {
+  PublicKey,
+  type Transaction,
+  type VersionedTransaction,
+} from "@solana/web3.js";
 import config from "../config.js";
 import privy, { getUserWallet } from "./privy.js";
 import pluginNFT from "@solana-agent-kit/plugin-nft";
 import pluginMisc from "@solana-agent-kit/plugin-misc";
-import pluginDefi from "@solana-agent-kit/plugin-defi";
+// import pluginDefi from "@solana-agent-kit/plugin-defi";
 import pluginToken from "@solana-agent-kit/plugin-token";
-import OpenAI from "openai";
-
-// Define types
-interface AgentConfig {
-  solanaKit: SolanaAgentKit;
-  vercelAITools: any[];
-}
-
-interface Wallet {
-  id: string;
-  address: string;
-  [key: string]: any;
-}
-
-interface SignedTransaction {
-  signatures: string[];
-  [key: string]: any;
-}
-
-interface TransactionResult {
-  signature: string;
-}
-
-interface ChatCompletionTool {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
+import { generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 
 /**
  * Initialize Solana Agent for a specific user
  * @param userId - User ID to identify agent state
  * @returns The agent and its configuration
  */
-export async function initializeAgent(userId: string): Promise<AgentConfig> {
+export async function initializeAgent(userId: string) {
   try {
     // Get or create user's wallet using Privy
     const wallet = await getUserWallet(userId);
@@ -60,13 +35,16 @@ export async function initializeAgent(userId: string): Promise<AgentConfig> {
           const { signature } = await privy.walletApi.solana.signMessage({
             address: wallet.address,
             walletId: wallet.id,
-            // @ts-expect-error - chainType is not typed to solana
             chainType: "solana",
             message,
           });
-          if (typeof signature === 'string') {
+          if (typeof signature === "string") {
             // Convert hex string to byte array
-            const bytes = new Uint8Array((signature as any).match(/.{1,2}/g)?.map((byte: string) => parseInt(byte, 16)) || []);
+            const bytes = new Uint8Array(
+              (signature as any)
+                .match(/.{1,2}/g)
+                ?.map((byte: string) => Number.parseInt(byte, 16)) || []
+            );
             return bytes;
           }
           return signature;
@@ -82,8 +60,6 @@ export async function initializeAgent(userId: string): Promise<AgentConfig> {
                 await privy.walletApi.solana.signTransaction({
                   address: wallet.address,
                   walletId: wallet.id,
-                  // @ts-expect-error - chainType is not typed to solana
-
                   chainType: "solana",
                   transaction: tx,
                 });
@@ -104,8 +80,6 @@ export async function initializeAgent(userId: string): Promise<AgentConfig> {
             await privy.walletApi.solana.signTransaction({
               address: wallet.address,
               walletId: wallet.id,
-              // @ts-expect-error - chainType is not typed to solana
-
               chainType: "solana",
               transaction: tx,
             });
@@ -121,7 +95,6 @@ export async function initializeAgent(userId: string): Promise<AgentConfig> {
           const { hash } = await privy.walletApi.solana.signAndSendTransaction({
             address: wallet.address,
             caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", // Mainnet Solana
-            // @ts-expect-error - chainType is not typed to solana
             chainType: "solana",
             walletId: wallet.id,
             transaction: tx,
@@ -132,28 +105,19 @@ export async function initializeAgent(userId: string): Promise<AgentConfig> {
       },
       config.rpcUrl,
       {}
-    ).use(pluginNFT).use(pluginMisc).use(pluginDefi);
+    )
+      .use(pluginNFT)
+      .use(pluginMisc)
+      .use(pluginToken);
 
     // Create Vercel AI tools for the Solana agent
-    const vercelAITools = Object.values(
-      createVercelAITools(solanaKit, solanaKit.actions)
-    );
+    const vercelAITools = createVercelAITools(solanaKit, solanaKit.actions);
 
     return { solanaKit, vercelAITools };
   } catch (error) {
     console.error("Failed to initialize Solana agent:", error);
     throw error;
   }
-}
-
-/**
- * Get Vercel AI tools for a user
- * @param userId - User ID
- * @returns Vercel AI tools for the user
- */
-export async function getVercelAITools(userId: string): Promise<any[]> {
-  const { vercelAITools } = await initializeAgent(userId);
-  return vercelAITools;
 }
 
 /**
@@ -169,15 +133,10 @@ export async function processSolanaMessage(
   onTyping?: () => Promise<void>
 ): Promise<string> {
   try {
-    // Initialize OpenAI from config
-    const openai = new OpenAI({
-      apiKey: config.openaiApiKey,
-    });
+    const openai = createOpenAI({ apiKey: config.openaiApiKey });
 
-    // Get Solana kit for this user
-    const { solanaKit } = await initializeAgent(userId);
+    const { vercelAITools } = await initializeAgent(userId);
 
-    // Create a system prompt
     const systemPrompt = `You are a helpful assistant specializing in Solana blockchain.
 You can help users with their Solana-related queries and explain blockchain concepts.
 Provide accurate and clear information about Solana's features, tokens, NFTs, and wallets.
@@ -187,91 +146,28 @@ If asked to do something you cannot do with your current tools, explain your lim
 Be concise and helpful with your responses.
 Do not generate images or handle image-related tasks - those are handled by a different system.`;
 
-    // Extract available actions from solanaKit
-    const availableActions: ChatCompletionTool[] = Object.entries(
-      solanaKit.actions
-    ).map(([name, action]) => {
-      return {
-        type: "function" as const,
-        function: {
-          name,
-          description:
-            action.description || `Perform the ${name} action on Solana`,
-          parameters: { type: "object", properties: {} },
-        },
-      };
-    });
-
     try {
-      // Call OpenAI with properly formatted tools
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        tools: availableActions,
-        tool_choice: "auto",
+      const response = await generateText({
+        model: openai("gpt-4o-mini"),
         temperature: 0.7,
+        maxSteps: 5,
+        tools: vercelAITools,
+        messages: [
+          {
+            role: "user",
+            content: message,
+          },
+        ],
+        system: systemPrompt,
       });
 
-      // Process tool calls if needed
-      let responseContent = completion.choices[0]?.message?.content || "I apologize, but I couldn't process your request at the moment.";
-      const toolCalls = completion.choices[0]?.message?.tool_calls;
+      const completion = response.text;
 
-      if (toolCalls && toolCalls.length > 0) {
-        // Handle tool calls sequentially
-        for (const toolCall of toolCalls) {
-          try {
-            const actionName = toolCall.function.name;
-            const action = (solanaKit.actions as Record<string, any>)[actionName];
-
-            if (!action) {
-              responseContent += `\n\nUnable to find tool: ${actionName}`;
-              continue;
-            }
-
-            // Parse arguments
-            const args = JSON.parse(toolCall.function.arguments);
-
-            // Execute the action from solanaKit
-            const result = await action(args);
-
-            try {
-              // Create a new completion with the tool results
-              const followUpCompletion = await openai.chat.completions.create({
-                model: "gpt-4-turbo-preview",
-                messages: [
-                  { role: "system", content: systemPrompt },
-                  { role: "user", content: message },
-                  {
-                    role: "assistant",
-                    content: responseContent,
-                    tool_calls: toolCalls,
-                  },
-                  {
-                    role: "tool",
-                    tool_call_id: toolCall.id,
-                    content: JSON.stringify(result),
-                  },
-                ],
-                temperature: 0.7,
-              });
-
-              // Update response with follow-up completion
-              responseContent = followUpCompletion.choices[0]?.message?.content || responseContent;
-            } catch (followUpError) {
-              console.error("Error in follow-up completion:", followUpError);
-              responseContent += "\n\nI encountered an error while processing the tool results. Please try again.";
-            }
-          } catch (toolError) {
-            console.error("Error executing tool:", toolError);
-            responseContent += "\n\nI encountered an error while using one of my tools. Please try again.";
-          }
-        }
+      if (onTyping) {
+        await onTyping();
       }
 
-      return responseContent;
+      return completion ?? "I apologize, but I couldn't generate a response.";
     } catch (openaiError) {
       console.error("OpenAI API error:", openaiError);
       return "I apologize, but I'm having trouble processing your request at the moment. Please try again later.";
@@ -284,6 +180,5 @@ Do not generate images or handle image-related tasks - those are handled by a di
 
 export default {
   initializeAgent,
-  getVercelAITools,
   processSolanaMessage,
 };
