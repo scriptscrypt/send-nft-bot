@@ -26,13 +26,14 @@ export async function initializeAgent(userId) {
                 const { signature } = await privy.walletApi.solana.signMessage({
                     address: wallet.address,
                     walletId: wallet.id,
-                    // @ts-expect-error - chainType is not typed to solana
                     chainType: "solana",
                     message,
                 });
-                if (typeof signature === 'string') {
+                if (typeof signature === "string") {
                     // Convert hex string to byte array
-                    const bytes = new Uint8Array(signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []);
+                    const bytes = new Uint8Array(signature
+                        .match(/.{1,2}/g)
+                        ?.map((byte) => parseInt(byte, 16)) || []);
                     return bytes;
                 }
                 return signature;
@@ -42,7 +43,6 @@ export async function initializeAgent(userId) {
                     const { signedTransaction } = await privy.walletApi.solana.signTransaction({
                         address: wallet.address,
                         walletId: wallet.id,
-                        // @ts-expect-error - chainType is not typed to solana
                         chainType: "solana",
                         transaction: tx,
                     });
@@ -57,7 +57,6 @@ export async function initializeAgent(userId) {
                 const { signedTransaction } = await privy.walletApi.solana.signTransaction({
                     address: wallet.address,
                     walletId: wallet.id,
-                    // @ts-expect-error - chainType is not typed to solana
                     chainType: "solana",
                     transaction: tx,
                 });
@@ -70,14 +69,17 @@ export async function initializeAgent(userId) {
                 const { hash } = await privy.walletApi.solana.signAndSendTransaction({
                     address: wallet.address,
                     caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", // Mainnet Solana
-                    // @ts-expect-error - chainType is not typed to solana
                     chainType: "solana",
                     walletId: wallet.id,
                     transaction: tx,
                 });
                 return { signature: hash };
             },
-        }, config.rpcUrl, {}).use(pluginNFT).use(pluginMisc).use(pluginDefi);
+        }, config.rpcUrl, {})
+            // @ts-expect-error - false type mismatch
+            .use(pluginNFT)
+            .use(pluginMisc)
+            .use(pluginDefi);
         // Create Vercel AI tools for the Solana agent
         const vercelAITools = Object.values(createVercelAITools(solanaKit, solanaKit.actions));
         return { solanaKit, vercelAITools };
@@ -144,7 +146,8 @@ Do not generate images or handle image-related tasks - those are handled by a di
                 temperature: 0.7,
             });
             // Process tool calls if needed
-            let responseContent = completion.choices[0]?.message?.content || "I apologize, but I couldn't process your request at the moment.";
+            let responseContent = completion.choices[0]?.message?.content ||
+                "I apologize, but I couldn't process your request at the moment.";
             const toolCalls = completion.choices[0]?.message?.tool_calls;
             if (toolCalls && toolCalls.length > 0) {
                 // Handle tool calls sequentially
@@ -181,16 +184,20 @@ Do not generate images or handle image-related tasks - those are handled by a di
                                 temperature: 0.7,
                             });
                             // Update response with follow-up completion
-                            responseContent = followUpCompletion.choices[0]?.message?.content || responseContent;
+                            responseContent =
+                                followUpCompletion.choices[0]?.message?.content ||
+                                    responseContent;
                         }
                         catch (followUpError) {
                             console.error("Error in follow-up completion:", followUpError);
-                            responseContent += "\n\nI encountered an error while processing the tool results. Please try again.";
+                            responseContent +=
+                                "\n\nI encountered an error while processing the tool results. Please try again.";
                         }
                     }
                     catch (toolError) {
                         console.error("Error executing tool:", toolError);
-                        responseContent += "\n\nI encountered an error while using one of my tools. Please try again.";
+                        responseContent +=
+                            "\n\nI encountered an error while using one of my tools. Please try again.";
                     }
                 }
             }
