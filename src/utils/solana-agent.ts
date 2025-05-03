@@ -35,6 +35,7 @@ export async function initializeAgent(userId: string) {
           const { signature } = await privy.walletApi.solana.signMessage({
             address: wallet.address,
             walletId: wallet.id,
+            // @ts-expect-error Privy types are wrong
             chainType: "solana",
             message,
           });
@@ -60,6 +61,7 @@ export async function initializeAgent(userId: string) {
                 await privy.walletApi.solana.signTransaction({
                   address: wallet.address,
                   walletId: wallet.id,
+                  // @ts-expect-error Privy types are wrong
                   chainType: "solana",
                   transaction: tx,
                 });
@@ -80,6 +82,7 @@ export async function initializeAgent(userId: string) {
             await privy.walletApi.solana.signTransaction({
               address: wallet.address,
               walletId: wallet.id,
+              // @ts-expect-error Privy types are wrong
               chainType: "solana",
               transaction: tx,
             });
@@ -95,6 +98,7 @@ export async function initializeAgent(userId: string) {
           const { hash } = await privy.walletApi.solana.signAndSendTransaction({
             address: wallet.address,
             caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", // Mainnet Solana
+            // @ts-expect-error Privy types are wrong
             chainType: "solana",
             walletId: wallet.id,
             transaction: tx,
