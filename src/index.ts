@@ -1,10 +1,9 @@
-import { Telegraf, Markup, Context } from "telegraf";
-import OpenAI from "openai";
-import fs from "fs";
-import path from "path";
-import http from "http";
+import { Telegraf, Markup, type Context } from "telegraf";
+import fs from "node:fs";
+import path from "node:path";
+import http from "node:http";
 import config from "./config";
-import supabase, { storeImage, getUserImages } from "./utils/supabase.js";
+import { storeImage, getUserImages } from "./utils/supabase.js";
 import {
   createUserWallet,
   getUserWallet,
@@ -14,6 +13,8 @@ import {
   revokeWallet,
 } from "./utils/privy.js";
 import { processSolanaMessage } from "./utils/solana-agent.js";
+import { experimental_generateImage } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 
 // Define types
 interface BotContext extends Context {
@@ -52,11 +53,6 @@ server.listen(PORT, () => {
 if (!fs.existsSync(config.outputDir)) {
   fs.mkdirSync(config.outputDir);
 }
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: config.openaiApiKey,
-});
 
 // Initialize Telegram bot
 const bot = new Telegraf<BotContext>(config.telegramToken);
@@ -219,24 +215,23 @@ bot.command("gen", async (ctx) => {
     return ctx.reply(
       "Please provide a prompt for your image. Example: A beautiful sunset"
     );
-  } else {
-    // Prompt was provided, show image type options
-    return ctx.reply(
-      `Please select image type for: "${prompt}"`,
-      Markup.inlineKeyboard([
-        [
-          Markup.button.callback(
-            "Standard",
-            `genstandard:${encodeURIComponent(prompt)}`
-          ),
-          Markup.button.callback(
-            "Transparent BG",
-            `gentransparent:${encodeURIComponent(prompt)}`
-          ),
-        ],
-      ])
-    );
   }
+  // Prompt was provided, show image type options
+  return ctx.reply(
+    `Please select image type for: "${prompt}"`,
+    Markup.inlineKeyboard([
+      [
+        Markup.button.callback(
+          "Standard",
+          `genstandard:${encodeURIComponent(prompt)}`
+        ),
+        Markup.button.callback(
+          "Transparent BG",
+          `gentransparent:${encodeURIComponent(prompt)}`
+        ),
+      ],
+    ])
+  );
 });
 
 // Handle callback for standard image generation
@@ -252,19 +247,27 @@ bot.action(/genstandard:(.+)/, async (ctx) => {
       "🎨 Generating your image, please wait..."
     );
 
-    // Generate the image
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      quality: "auto",
+    const openai = createOpenAI({
+      apiKey: config.openaiApiKey,
     });
 
-    if (!result.data?.[0]?.b64_json) {
+    const result = await experimental_generateImage({
+      model: openai.image("gpt-image-1"),
+      prompt,
+    });
+    // Generate the image
+    // const result = await openai.images.generate({
+    //   model: "gpt-image-1",
+    //   prompt,
+    //   quality: "auto",
+    // });
+
+    if (!result.image) {
       throw new Error("No image data received from OpenAI");
     }
 
     // Get the image as base64
-    const image_base64 = result.data[0].b64_json;
+    const image_base64 = result.image.base64;
     const image_bytes = Buffer.from(image_base64, "base64");
 
     // Save the image locally
@@ -324,19 +327,26 @@ bot.action(/gentransparent:(.+)/, async (ctx) => {
       "🎨 Generating your transparent image, please wait..."
     );
 
-    // Generate the image with transparent background
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt: `${prompt} with transparent background`,
-      quality: "auto",
+    const openai = createOpenAI({
+      apiKey: config.openaiApiKey,
     });
 
-    if (!result.data?.[0]?.b64_json) {
+    // Generate the image with transparent background
+    const result = await experimental_generateImage({
+      model: openai.image("gpt-image-1"),
+      prompt,
+      providerOptions: {
+        openai: {
+          transparent: true,
+        },
+      },
+    });
+    if (!result.image) {
       throw new Error("No image data received from OpenAI");
     }
 
     // Get the image as base64
-    const image_base64 = result.data[0].b64_json;
+    const image_base64 = result.image.base64;
     const image_bytes = Buffer.from(image_base64, "base64");
 
     // Save the image locally
