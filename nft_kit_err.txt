@@ -1,0 +1,149 @@
+{
+        "id": "chatcmpl-BTckoOxx8S2S0SLfmbcONgjltddQ7",
+        "timestamp": "2025-05-04T23:09:42.000Z",
+        "modelId": "gpt-4o-mini-2024-07-18",
+        "headers": {
+          "access-control-expose-headers": "X-Request-ID",
+          "alt-svc": "h3=\":443\"; ma=86400",
+          "cf-cache-status": "DYNAMIC",
+          "cf-ray": "93abaacd98489377-MAA",
+          "connection": "keep-alive",
+          "content-encoding": "br",
+          "content-type": "application/json",
+          "date": "Sun, 04 May 2025 23:09:43 GMT",
+          "openai-organization": "user-n1npz50pbfvs630snkpke3sw",
+          "openai-processing-ms": "1636",
+          "openai-version": "2020-10-01",
+          "server": "cloudflare",
+          "set-cookie": "_cfuvid=UsqJETqH6xvyIca65EOTjY4B3h8rubYPweTTJJG.RlQ-1746400183475-0.0.1.1-604800000; path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None",
+          "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+          "transfer-encoding": "chunked",
+          "x-content-type-options": "nosniff",
+          "x-ratelimit-limit-requests": "10000",
+          "x-ratelimit-limit-tokens": "200000",
+          "x-ratelimit-remaining-requests": "9998",
+          "x-ratelimit-remaining-tokens": "185714",
+          "x-ratelimit-reset-requests": "12.859s",
+          "x-ratelimit-reset-tokens": "4.285s",
+          "x-request-id": "req_ac6179f6c2aa5b0b4fe8f35f91092fb3"
+        },
+        "body": {
+          "id": "chatcmpl-BTckoOxx8S2S0SLfmbcONgjltddQ7",
+          "object": "chat.completion",
+          "created": 1746400182,
+          "model": "gpt-4o-mini-2024-07-18",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "It seems that the deployment of the NFT collection has failed due to a transaction signature verification error. This issue can occur for various reasons, such as insufficient funds or network issues.\n\nPlease try again later, or ensure that your wallet has enough SOL to cover the transaction fees. If the problem persists, you may want to check the status of the Solana network.",
+                "refusal": null,
+                "annotations": []
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 19329,
+            "completion_tokens": 74,
+            "total_tokens": 19403,
+            "prompt_tokens_details": {
+              "cached_tokens": 19200,
+              "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "audio_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
+            }
+          },
+          "service_tier": "default",
+          "system_fingerprint": "fp_dbaca60df0"
+        },
+        "messages": [
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool-call",
+                "toolCallId": "call_t3sjUI4WnF2PdlvSOzakjyt8",
+                "toolName": "0",
+                "args": {
+                  "name": "trump",
+                  "uri": "https://gateway.pinata.cloud/ipfs/QmWdt3k2sJW8shbvVq3EBWCvaNEszNrMMteTsvj6mfEA4W"
+                }
+              }
+            ],
+            "id": "msg-DjsYWb9XZKRFKgDtBqTn3rmR"
+          },
+          {
+            "role": "tool",
+            "id": "msg-6KJz3qRbiqsIVHdxVABicasp",
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call_t3sjUI4WnF2PdlvSOzakjyt8",
+                "toolName": "0",
+                "result": {
+                  "status": "error",
+                  "message": "Collection deployment failed: Error broadcasting transaction with message: Error: Transaction signature verification failure",
+                  "code": "EXECUTION_ERROR"
+                }
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "It seems that the deployment of the NFT collection has failed due to a transaction signature verification error. This issue can occur for various reasons, such as insufficient funds or network issues.\n\nPlease try again later, or ensure that your wallet has enough SOL to cover the transaction fees. If the problem persists, you may want to check the status of the Solana network."
+              }
+            ],
+            "id": "msg-SHtWZuFxsHzws0WQuARKIZob"
+          }
+        ]
+      },
+      "providerMetadata": {
+        "openai": {
+          "reasoningTokens": 0,
+          "acceptedPredictionTokens": 0,
+          "rejectedPredictionTokens": 0,
+          "cachedPromptTokens": 19200
+        }
+      },
+      "experimental_providerMetadata": {
+        "openai": {
+          "reasoningTokens": 0,
+          "acceptedPredictionTokens": 0,
+          "rejectedPredictionTokens": 0,
+          "cachedPromptTokens": 19200
+        }
+      },
+      "isContinued": false
+    }
+  ],
+  "experimental_providerMetadata": {
+    "openai": {
+      "reasoningTokens": 0,
+      "acceptedPredictionTokens": 0,
+      "rejectedPredictionTokens": 0,
+      "cachedPromptTokens": 19200
+    }
+  },
+  "providerMetadata": {
+    "openai": {
+      "reasoningTokens": 0,
+      "acceptedPredictionTokens": 0,
+      "rejectedPredictionTokens": 0,
+      "cachedPromptTokens": 19200
+    }
+  },
+  "sources": []
+}
+[NFT Collection] Agent response for user 1089734463: It seems that the deployment of the NFT collection has failed due to a transaction signature verification error. This issue can occur for various reasons, such as insufficient funds or network issues.
+
+Please try again later, or ensure that your wallet has enough SOL to cover the transaction fees. If the problem persists, you may want to check the status of the Solana network.

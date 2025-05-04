@@ -15,6 +15,9 @@ import {
 import { processSolanaMessage } from "./utils/solana-agent.js";
 import { experimental_generateImage } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
+import fetch from "node-fetch";
+import FormData from "form-data";
+
 
 // Define types
 interface BotContext extends Context {
@@ -291,14 +294,12 @@ bot.action(/genstandard:(.+)/, async (ctx) => {
     await ctx.replyWithPhoto(
       { source: image_bytes },
       {
-        caption: `Image generated: "${prompt}"`,
+        caption: `Image generated: "${prompt}"\n\n[View Image](${storedImage.url})`,
+        parse_mode: "Markdown",
         ...Markup.inlineKeyboard([
           [
-            Markup.button.callback("Launch on Pump", `pump:${storedImage.id}`),
-            Markup.button.callback(
-              "Mint to Collection",
-              `mint:${storedImage.id}`
-            ),
+            Markup.button.callback("Create NFT Collection", `create_collection:${storedImage.id}`),
+            Markup.button.callback("Mint to Specific Collection", `mint_specific:${storedImage.id}`),
           ],
         ]),
       }
@@ -370,14 +371,12 @@ bot.action(/gentransparent:(.+)/, async (ctx) => {
     await ctx.replyWithPhoto(
       { source: image_bytes },
       {
-        caption: `Image generated: "${prompt}"`,
+        caption: `Image generated: "${prompt}"\n\n[View Image](${storedImage.url})`,
+        parse_mode: "Markdown",
         ...Markup.inlineKeyboard([
           [
-            Markup.button.callback("Launch on Pump", `pump:${storedImage.id}`),
-            Markup.button.callback(
-              "Mint to Collection",
-              `mint:${storedImage.id}`
-            ),
+            Markup.button.callback("Create NFT Collection", `create_collection:${storedImage.id}`),
+            Markup.button.callback("Mint to Specific Collection", `mint_specific:${storedImage.id}`),
           ],
         ]),
       }
@@ -537,46 +536,175 @@ bot.action("wallet:revoke", async (ctx) => {
   }
 });
 
-// Handle Pump launch
-bot.action(/pump:(.+)/, async (ctx) => {
+// Update Create NFT Collection handler to include metadata upload and agent call
+bot.action(/create_collection:(.+)/, async (ctx) => {
+  let statusMessage: any = null;
   try {
     const imageId = ctx.match[1];
-    await ctx.answerCbQuery("Launching on Pump...");
-
-    // TODO: Implement Pump launch logic
-    ctx.reply(
-      "Pump launch feature coming soon!",
+    await ctx.answerCbQuery("Starting NFT Collection creation...");
+    const userId = ctx.from.id.toString();
+    const images = await getUserImages(userId);
+    const image = images.find((img) => img.id === imageId);
+    if (!image) {
+      console.log(`[NFT Collection] Image not found for user ${userId}, imageId: ${imageId}`);
+      return ctx.reply(
+        "Image not found.",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("« Back to Menu", "back_to_menu")],
+        ])
+      );
+    }
+    // 1. Notify user: Uploading image to Pinata
+    console.log(`[NFT Collection] Uploading image to Pinata for user ${userId}, image: ${image.filename}`);
+    statusMessage = await ctx.reply("📤 Uploading image to Pinata...");
+    // Download the image from Supabase URL
+    const imageResponse = await fetch(image.url);
+    if (!imageResponse.ok) throw new Error("Failed to download image for Pinata upload");
+    const imageBuffer = await imageResponse.buffer();
+    // Upload image to Pinata
+    const pinataImageUrl = await uploadToPinata(imageBuffer, image.filename);
+    console.log(`[NFT Collection] Image uploaded to Pinata: ${pinataImageUrl}`);
+    // 2. Notify user: Uploading metadata to Pinata
+    await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    statusMessage = await ctx.reply("📝 Uploading metadata to Pinata...");
+    // Create metadata object
+    const meta = {
+      name: image.prompt,
+      symbol: image.prompt,
+      description: image.prompt,
+      image: pinataImageUrl,
+      attributes: [
+        {
+          trait_type: "Total Supply",
+          value: "1000000000"
+        }
+      ]
+    };
+    // Upload metadata to Pinata
+    console.log(`[NFT Collection] Uploading metadata to Pinata for user ${userId}`);
+    const pinataMetaUrl = await uploadMetadataToPinata(meta);
+    console.log(`[NFT Collection] Metadata uploaded to Pinata: ${pinataMetaUrl}`);
+    // Store metadata URI in session
+    ctx.session!.lastMetadataUri = pinataMetaUrl;
+    // 3. Notify user: Creating NFT Collection on Solana
+    await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    statusMessage = await ctx.reply("🚀 Creating NFT Collection on Solana using your metadata URI...");
+    // Compose prompt for Solana agent
+    const agentPrompt = `Please create an NFT collection using this metadata URI: ${pinataMetaUrl}\nName: ${image.prompt}\nUse default values for all other fields.`;
+    console.log(`[NFT Collection] Calling Solana agent for user ${userId} with prompt: ${agentPrompt}`);
+    const response = await processSolanaMessage(userId, agentPrompt);
+    console.log(`[NFT Collection] Agent response for user ${userId}: ${response}`);
+    await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    await ctx.reply(
+      response,
       Markup.inlineKeyboard([
         [Markup.button.callback("« Back to Menu", "back_to_menu")],
       ])
     );
   } catch (error) {
-    console.error("Error launching on Pump:", error);
+    if (statusMessage && ctx.chat) {
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, statusMessage.message_id); } catch {}
+    }
+    console.error("Error creating NFT collection:", error);
     ctx.reply(
-      "Sorry, there was an error launching on Pump. Please try again later."
+      "Sorry, there was an error creating the NFT collection. Please try again later.",
+      Markup.inlineKeyboard([
+        [Markup.button.callback("« Back to Menu", "back_to_menu")],
+      ])
     );
   }
 });
 
-// Handle NFT minting
-bot.action(/mint:(.+)/, async (ctx) => {
+// Add Mint to Specific Collection handler
+bot.action(/mint_specific:(.+)/, async (ctx) => {
   try {
     const imageId = ctx.match[1];
-    await ctx.answerCbQuery("Minting NFT...");
-
-    // TODO: Implement NFT minting logic
+    await ctx.answerCbQuery("Mint to Specific Collection...");
+    const userId = ctx.from.id.toString();
+    // Store the imageId in session to await collection address
+    ctx.session!.awaitingCollectionAddress = { imageId };
+    await ctx.reply(
+      "Please reply with the collection address where you want to mint this NFT.",
+      Markup.inlineKeyboard([
+        [Markup.button.callback("Cancel", "cancel_mint_specific")],
+      ])
+    );
+  } catch (error) {
+    console.error("Error preparing mint to specific collection:", error);
     ctx.reply(
-      "NFT minting feature coming soon!",
+      "Sorry, there was an error. Please try again later."
+    );
+  }
+});
+
+// Cancel mint to specific collection
+bot.action("cancel_mint_specific", async (ctx) => {
+  ctx.session!.awaitingCollectionAddress = undefined;
+  await ctx.reply(
+    "Mint to specific collection cancelled.",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("« Back to Menu", "back_to_menu")],
+    ])
+  );
+});
+
+// Handle user reply with collection address
+bot.on("text", async (ctx, next) => {
+  if (ctx.session!.awaitingCollectionAddress) {
+    const userId = ctx.from.id.toString();
+    const { imageId } = ctx.session!.awaitingCollectionAddress;
+    const collectionAddress = ctx.message.text.trim();
+    // Validate address (basic check)
+    if (!/^\w{32,44}$/.test(collectionAddress)) {
+      return ctx.reply("That doesn't look like a valid collection address. Please try again or press Cancel.");
+    }
+    const images = await getUserImages(userId);
+    const image = images.find((img) => img.id === imageId);
+    if (!image) {
+      ctx.session!.awaitingCollectionAddress = undefined;
+      return ctx.reply(
+        "Image not found.",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("« Back to Menu", "back_to_menu")],
+        ])
+      );
+    }
+    const mintPrompt = `${image.prompt}\n\nMint this image as an NFT to collection ${collectionAddress} with the url: ${image.url}`;
+    const response = await processSolanaMessage(userId, mintPrompt);
+    ctx.session!.awaitingCollectionAddress = undefined;
+    await ctx.reply(
+      response,
       Markup.inlineKeyboard([
         [Markup.button.callback("« Back to Menu", "back_to_menu")],
       ])
     );
-  } catch (error) {
-    console.error("Error minting NFT:", error);
-    ctx.reply(
-      "Sorry, there was an error minting the NFT. Please try again later."
-    );
+    return;
   }
+  // Check for metadata/uri usage
+  if (/using the metadata ?\/ ?uri from previous message/i.test(ctx.message.text)) {
+    const userId = ctx.from.id.toString();
+    const lastUri = ctx.session!.lastMetadataUri;
+    if (!lastUri) {
+      return ctx.reply(
+        "No metadata URI found from previous message. Please create NFT metadata first.",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("« Back to Menu", "back_to_menu")],
+        ])
+      );
+    }
+    // Compose prompt for Solana agent
+    const agentPrompt = `Please create an NFT collection using this metadata URI: ${lastUri}`;
+    const response = await processSolanaMessage(userId, agentPrompt);
+    await ctx.reply(
+      response,
+      Markup.inlineKeyboard([
+        [Markup.button.callback("« Back to Menu", "back_to_menu")],
+      ])
+    );
+    return;
+  }
+  // If not awaiting collection address or metadata/uri, continue to next handler
+  return next();
 });
 
 // Handle text messages for image generation
@@ -616,6 +744,43 @@ bot.on("text", async (ctx) => {
     );
   }
 });
+
+// Pinata upload helpers
+const PINATA_JWT = process.env.PINATA_JWT;
+const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "https://api.pinata.cloud";
+
+async function uploadToPinata(buffer: Buffer, filename: string): Promise<string> {
+  if (!PINATA_JWT) throw new Error("Pinata JWT not set in environment");
+  const data = new FormData();
+  data.append("file", buffer, { filename });
+  const res = await fetch(`${PINATA_GATEWAY}/pinning/pinFileToIPFS`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${PINATA_JWT}`,
+      ...data.getHeaders(),
+    },
+    body: data,
+  });
+  if (!res.ok) throw new Error("Failed to upload image to Pinata");
+  const result = await res.json();
+  // Return gateway URL
+  return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+}
+
+async function uploadMetadataToPinata(metadata: object): Promise<string> {
+  if (!PINATA_JWT) throw new Error("Pinata JWT not set in environment");
+  const res = await fetch(`${PINATA_GATEWAY}/pinning/pinJSONToIPFS`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${PINATA_JWT}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(metadata),
+  });
+  if (!res.ok) throw new Error("Failed to upload metadata to Pinata");
+  const result = await res.json();
+  return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+}
 
 // Handle errors
 bot.catch((err, ctx) => {

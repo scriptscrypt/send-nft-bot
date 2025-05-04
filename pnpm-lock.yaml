@@ -35,12 +35,18 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.39.0
         version: 2.49.4(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      '@types/form-data':
+        specifier: ^2.5.2
+        version: 2.5.2
       ai:
         specifier: ^4.3.13
         version: 4.3.13(react@19.1.0)(zod@3.24.3)
       dotenv:
         specifier: ^16.3.1
         version: 16.5.0
+      form-data:
+        specifier: ^4.0.2
+        version: 4.0.2
       node-fetch:
         specifier: ^2.7.0
         version: 2.7.0
@@ -1510,6 +1516,10 @@ packages:
 
   '@types/diff-match-patch@1.0.36':
     resolution: {integrity: sha512-xFdR6tkm0MWvBfO8xXCSsinYxHcqkQUlcHeSpMC2ukzOb6lwQAfDmW+Qt0AvlGd8HpsS28qKsB+oPeJn9I39jg==}
+
+  '@types/form-data@2.5.2':
+    resolution: {integrity: sha512-tfmcyHn1Pp9YHAO5r40+UuZUPAZbUEgqTel3EuEKpmF9hPkXgR4l41853raliXnb4gwyPNoQOfvgGGlHN5WSog==}
+    deprecated: This is a stub types definition. form-data provides its own type definitions, so you do not need this installed.
 
   '@types/hast@3.0.4':
     resolution: {integrity: sha512-WPs+bbQw5aCj+x6laNGWLH3wviHtoCv/P3+otBhbOhJgG8qtpdAMlTCxLtsTWA7LH1Oh/bFCHsBn0TPS5m30EQ==}
@@ -7884,6 +7894,10 @@ snapshots:
       decimal.js: 10.5.0
 
   '@types/diff-match-patch@1.0.36': {}
+
+  '@types/form-data@2.5.2':
+    dependencies:
+      form-data: 4.0.2
 
   '@types/hast@3.0.4':
     dependencies:

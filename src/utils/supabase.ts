@@ -3,6 +3,7 @@ import config from '../config.js';
 
 // Define types
 interface ImageData {
+  id: string;
   user_id: string;
   filename: string;
   prompt: string;

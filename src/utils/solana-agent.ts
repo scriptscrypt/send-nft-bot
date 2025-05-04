@@ -148,7 +148,9 @@ If you need to perform an action, use your available tools.
 If there is a server error, inform the user to try again later.
 If asked to do something you cannot do with your current tools, explain your limitations politely.
 Be concise and helpful with your responses.
-Do not generate images or handle image-related tasks - those are handled by a different system.`;
+Do not generate images or handle image-related tasks - those are handled by a different system.
+
+if the user asks to generate image, ask him to use the image generation tool - /gen <prompt> command`;
 
     try {
       const response = await generateText({
@@ -164,6 +166,9 @@ Do not generate images or handle image-related tasks - those are handled by a di
         ],
         system: systemPrompt,
       });
+
+      // Log the full response from the agent kit tool call
+      console.log("[Solana AgentKit] Full tool call response:", JSON.stringify(response, null, 2));
 
       const completion = response.text;
 
